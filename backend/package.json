@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "dev": "nodemon index.js",
     "start": "node index.js",
     "clean:data": "node scripts/cleanProperties.js"
@@ -14,7 +14,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@ai-sdk/google": "^4.0.90",
+    "@google/genai": "^2.27.0",
     "@supabase/supabase-js": "^2.117.2",
+    "ai": "^7.0.130",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.1",
     "csv-writer": "^1.6.0",
