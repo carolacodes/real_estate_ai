@@ -1,0 +1,47 @@
+/* Stitch's principal concierge panel; scoped to avoid changing page layouts. */
+.chat-dock { right: max(1.5rem, env(safe-area-inset-right)); bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+.chat-dock > * { pointer-events: auto; }
+.chat-panel { width: 476px; max-width: calc(100vw - 3rem); height: 730px; max-height: calc(100dvh - 6.5rem); }
+.chat-prompts { scrollbar-width: none; }
+.chat-prompts::-webkit-scrollbar { display: none; }
+@media (max-width: 639px) {
+  .chat-dock { right: max(.75rem, env(safe-area-inset-right)); bottom: max(.75rem, env(safe-area-inset-bottom)); }
+  .chat-panel { width: calc(100vw - 1.5rem); max-width: calc(100vw - 1.5rem); height: calc(100dvh - 5.75rem); max-height: calc(100dvh - 5.75rem); }
+}
+
+/* Launcher-only attention cues; the panel and its layout remain unchanged. */
+@keyframes aura-launcher-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-4px); }
+}
+@keyframes aura-launcher-online {
+  0%, 100% { opacity: .75; }
+  50% { opacity: 1; }
+}
+@keyframes aura-nudge-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.chat-nudge { animation: aura-nudge-fade 180ms ease-out both; }
+.chat-launcher { transition: background-color 180ms ease, box-shadow 180ms ease; }
+.chat-launcher:hover { box-shadow: 0 18px 40px -8px rgba(18,19,22,.42); }
+@media (prefers-reduced-motion: no-preference) {
+  .chat-launcher-bounce { animation: aura-launcher-bounce 650ms cubic-bezier(.22,.61,.36,1) 1; }
+  .chat-launcher[aria-expanded="false"] .chat-launcher-online { animation: aura-launcher-online 4s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .chat-launcher { transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+  .chat-launcher:hover { transform: scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-launcher-bounce, .chat-launcher-online { animation: none !important; }
+  .chat-launcher:hover { transform: none !important; }
+  /* A short opacity-only fade is the sole exception to the site's motion reset. */
+  .chat-nudge { animation: aura-nudge-fade 180ms ease-out both !important; }
+}
+@media (max-width: 639px) {
+  .chat-nudge { width: 236px; padding: .625rem .75rem; font-size: 12px; line-height: 1.5; }
+}
+@media (max-height: 479px), (max-width: 299px) {
+  .chat-nudge { display: none; }
+}

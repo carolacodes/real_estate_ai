@@ -220,7 +220,7 @@ Expected property data:
 - property_type
 - furnishing
 - completion_status
-- image_url
+- image_urls (text[], up to 4 images; empty array by default)
 
 Display:
 3–6 property cards.
@@ -591,7 +591,7 @@ Props / expected data:
 - address
 - property_type
 - completion_status
-- image_url
+- image_urls (text[], up to 4 images; empty array by default)
 
 States:
 
@@ -970,7 +970,7 @@ The current property inventory contains fields such as:
 - completion_status
 - handover
 - project_name
-- image_url
+- image_urls (text[], up to 4 images; empty array by default)
 - available
 - featured
 

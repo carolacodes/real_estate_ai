@@ -39,6 +39,7 @@ const compactProperty = (property) => ({
   property_type: property.property_type,
   furnishing: property.furnishing,
   completion_status: property.completion_status,
+  image_urls: property.image_urls ?? [],
 });
 
 export const searchPropertiesTool = tool({

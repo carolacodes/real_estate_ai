@@ -7,12 +7,12 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const inputPath = path.join(
+const inputPath = process.argv[2] || path.join(
   __dirname,
   "../data/uae-housing-selected.csv"
 );
 
-const outputPath = path.join(
+const outputPath = process.argv[3] || path.join(
   __dirname,
   "../data/properties-supabase.csv"
 );
@@ -74,7 +74,7 @@ fs.createReadStream(inputPath)
           project_name:
             property.project_name?.trim(),
 
-          image_url: "",
+          image_urls: "{}", // PostgreSQL empty text[] literal for CSV import.
 
           available: true,
 
@@ -123,8 +123,8 @@ fs.createReadStream(inputPath)
         },
 
         {
-          id: "image_url",
-          title: "image_url",
+          id: "image_urls",
+          title: "image_urls",
         },
 
         {

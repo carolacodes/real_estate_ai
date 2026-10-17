@@ -34,3 +34,12 @@ data/*.csv
 
 # Keep folder if needed
 !data/.gitkeep
+# Property photos stay local; keep only the empty directory in Git.
+data/property-images/**
+!data/property-images/.gitkeep
+
+# Local pilot references and generated planning artifacts.
+data/property-image-references/**
+!data/property-image-references/.gitkeep
+data/property-image-plan.json
+data/property-image-prompts/

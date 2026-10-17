@@ -106,9 +106,17 @@ export async function generateChatResponse(
               ?.properties ?? []
         );
 
+    const uniqueProperties = new Map();
+
+    for (const property of properties) {
+      if (property?.slug) {
+        uniqueProperties.set(property.slug, property);
+      }
+    }
+
     return {
       message: result.text,
-      properties,
+      properties: [...uniqueProperties.values()],
     };
   } finally {
     console.timeEnd("chat-total");
@@ -116,12 +124,12 @@ export async function generateChatResponse(
 }
 
 export function streamChatResponse(
-  messages
+  messages,
+  { signal } = {}
 ) {
-  console.time("chat-stream-total");
-
   return streamText({
     model: aiModel,
+    abortSignal: signal,
 
     system: SYSTEM_PROMPT,
 
@@ -132,14 +140,9 @@ export function streamChatResponse(
         searchPropertiesTool,
     },
 
-    stopWhen: stepCountIs(4),
+    stopWhen: [stepCountIs(4), ({ steps }) => Boolean(findSearchError(steps))],
 
     temperature: 0.2,
 
-    onFinish() {
-      console.timeEnd(
-        "chat-stream-total"
-      );
-    },
   });
 }

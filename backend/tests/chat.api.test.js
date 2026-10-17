@@ -16,10 +16,20 @@ const { chatRequestSchema } = await import("../schemas/chat.schema.js");
 
 const rows = Array.from({ length: 10 }, (_, i) => ({
   id: `fixture-${i}`, slug: `fixture-property-${i}`, price: 400000 + i * 100000,
+  project_name: `Fixture Residence ${i}`, area_sqft: 624 + i * 50,
   bedrooms: i < 4 ? 0 : 2, bathrooms: 1, property_type: "Apartment",
   furnishing: "Furnished", completion_status: "Ready", address: "Dubai Marina",
   available: i !== 1, featured: true, created_at: "2026-01-01T00:00:00Z",
 }));
+// Expected public tool contract, independently projected from the database fixture.
+const expectedProperty = ({
+  slug, project_name, price, bedrooms, bathrooms, area_sqft, address,
+  property_type, furnishing, completion_status, image_urls = [],
+}) => ({
+  slug, project_name, price, bedrooms, bathrooms, area_sqft, address,
+  property_type, furnishing, completion_status, image_urls,
+});
+
 let server;
 let baseUrl;
 let modelMock;
@@ -200,8 +210,8 @@ for (const [name, input, expected] of [
     useSearch(input);
     const { status, body } = await chat();
     assert.equal(status, 200);
-    assert.deepEqual(body.data.properties, expected);
-    assert.deepEqual(toolOutput().properties, expected);
+    assert.deepEqual(body.data.properties, expected.map(expectedProperty));
+    assert.deepEqual(toolOutput().properties, expected.map(expectedProperty));
   });
 }
 
@@ -210,9 +220,13 @@ test("tool never returns unavailable properties", async () => {
   const { status, body } = await chat();
   assert.equal(status, 200);
   assert.equal(body.data.properties.length, 8);
-  assert.ok(body.data.properties.every((p) => p.available === true));
-  assert.ok(toolOutput().properties.every((p) => p.available === true));
-  assert.ok(!body.data.properties.some((p) => p.id === "fixture-1"));
+  const unavailableFixture = rows.find((p) => p.available === false);
+  const expected = rows.filter((p) => p.available).slice(0, 8).map(expectedProperty);
+  assert.ok(unavailableFixture, "Fixture must include an unavailable property");
+  for (const properties of [body.data.properties, toolOutput().properties]) {
+    assert.equal(properties.some((p) => p.slug === unavailableFixture.slug), false);
+    assert.deepEqual(properties, expected);
+  }
 });
 
 for (const limit of [1, 3, 8]) {
@@ -240,7 +254,12 @@ test("multiple tool steps deduplicate properties and stop at four steps", async 
   const { status, body } = await chat();
   assert.equal(status, 200);
   assert.equal(calls.length, 4);
+  assert.equal(databaseMock.mock.callCount(), 4);
   assert.equal(body.data.properties.length, 3);
+  const expected = rows.filter((p) => p.available).slice(0, 3).map(expectedProperty);
+  assert.deepEqual(body.data.properties, expected);
+  assert.equal(new Set(body.data.properties.map((p) => p.slug)).size, 3);
+  assert.ok(body.data.properties.every((p) => !Object.hasOwn(p, "id")));
 });
 
 test("model error produces sanitized 500 through Express 5", async () => {
@@ -304,7 +323,7 @@ for (const withTool of [false, true]) {
       assert.ok(declaration);
       if (withTool) {
         assert.deepEqual(body.data.properties, rows.filter((p) =>
-          p.available && p.bedrooms === 0 && p.price <= 600000));
+          p.available && p.bedrooms === 0 && p.price <= 600000).map(expectedProperty));
         assert.ok(requests[1].contents.some((p) => p.parts.some((part) => part.functionResponse)));
       } else {
         assert.deepEqual(body.data.properties, []);
@@ -323,4 +342,115 @@ test("invalid model tool filters never query Supabase or reach a second model ca
   assert.deepEqual(body, { success: false, error: { message: "Internal server error" } });
   assert.equal(databaseMock.mock.callCount(), 0);
   assert.equal(calls.length, 1);
+});
+
+// Mock only provider I/O: run the installed SDK, real tool, controller and SSE transport.
+function useStream(t, { search = false, repeat = 1, error = false } = {}) {
+  let step = 0;
+  const streamCalls = [];
+  const streaming = mock.method(aiModel, 'doStream', async options => {
+    streamCalls.push(options);
+    const parts = [{ type: 'stream-start', warnings: [] }];
+    if (error) parts.push({ type: 'error', error: new Error('private provider detail') });
+    else if (search && step++ < repeat) parts.push({ type: 'tool-call', toolCallId: `search-${step}`, toolName: 'searchProperties', input: JSON.stringify({ bedrooms: 0, limit: 3 }) });
+    else parts.push({ type: 'text-start', id: 'answer' }, { type: 'text-delta', id: 'answer', delta: 'Encontré ' }, { type: 'text-delta', id: 'answer', delta: 'propiedades.' }, { type: 'text-end', id: 'answer' });
+    const reason = parts.some(part => part.type === 'tool-call') ? 'tool-calls' : error ? 'error' : 'stop';
+    parts.push({ type: 'finish', finishReason: { unified: reason, raw: reason }, usage: generated([]).usage });
+    return { stream: new ReadableStream({ start(controller) { parts.forEach(part => controller.enqueue(part)); controller.close(); } }) };
+  });
+  t.after(() => streaming.mock.restore());
+  return streamCalls;
+}
+async function postStream(accept = 'text/event-stream', messages = [user('Busco un Studio')]) {
+  return fetch(`${baseUrl}/stream`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: accept }, body: JSON.stringify({ messages }), signal: AbortSignal.timeout(20000) });
+}
+function frames(text) {
+  return text.trim().split('\n\n').map(frame => {
+    const lines = frame.split('\n');
+    return { event: lines[0].slice(7), data: JSON.parse(lines[1].slice(6)) };
+  });
+}
+
+test('SSE delivers incremental text and empty properties for a clarification without querying inventory', async t => {
+  const requests = useStream(t);
+  const response = await postStream('text/event-stream', [user('Quiero comprar una propiedad')]);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/event-stream/);
+  const events = frames(await response.text());
+  assert.deepEqual(events.filter(e => e.event === 'text-delta').map(e => e.data.text), ['Encontré ', 'propiedades.']);
+  assert.deepEqual(events.find(e => e.event === 'properties').data.properties, []);
+  assert.equal(events.at(-1).event, 'done');
+  assert.equal(databaseMock.mock.callCount(), 0);
+  assert.equal(requests.length, 1);
+});
+
+test('SSE returns real tool properties with images; search executes once', async t => {
+  rows[0].image_urls = ['https://example.test/inventory.webp'];
+  t.after(() => { delete rows[0].image_urls; });
+  const requests = useStream(t, { search: true });
+  const response = await postStream();
+  const events = frames(await response.text());
+  const results = events.find(event => event.event === 'properties').data.properties;
+  assert.deepEqual(results, rows.filter(p => p.available && p.bedrooms === 0).slice(0, 3).map(expectedProperty));
+  assert.deepEqual(results[0].image_urls, ['https://example.test/inventory.webp']);
+  assert.equal(databaseMock.mock.callCount(), 1);
+  assert.equal(requests.length, 2);
+  assert.equal(events.at(-1).event, 'done');
+});
+
+test('SSE deduplicates properties across model tool steps', async t => {
+  useStream(t, { search: true, repeat: 2 });
+  const events = frames(await (await postStream()).text());
+  assert.equal(events.find(e => e.event === 'properties').data.properties.length, 3);
+  assert.equal(databaseMock.mock.callCount(), 2);
+});
+
+test('stream without SSE Accept preserves plain-text curl contract', async t => {
+  useStream(t);
+  const response = await postStream('*/*');
+  assert.match(response.headers.get('content-type'), /text\/plain/);
+  assert.equal(await response.text(), 'Encontré propiedades.');
+});
+
+for (const source of ['provider', 'database']) test(`SSE sanitizes ${source} failure and never marks it successful`, async t => {
+  useStream(t, { search: source === 'database', error: source === 'provider' });
+  if (source === 'database') databaseError = { message: 'private Postgres detail' };
+  const response = await postStream();
+  const text = await response.text();
+  const events = frames(text);
+  assert.ok(events.some(event => event.event === 'error'));
+  assert.ok(!events.some(event => event.event === 'done' || event.event === 'properties'));
+  assert.ok(!text.includes('private'));
+});
+
+test('stream request validation returns 400 before calling provider', async t => {
+  const requests = useStream(t);
+  const response = await postStream('text/event-stream', []);
+  assert.equal(response.status, 400);
+  assert.equal(requests.length, 0);
+});
+
+test('disconnecting an SSE client aborts the provider request', async t => {
+  let started;
+  let aborted;
+  const providerStarted = new Promise(resolve => { started = resolve; });
+  const providerAborted = new Promise(resolve => { aborted = resolve; });
+  const streaming = mock.method(aiModel, 'doStream', async ({ abortSignal }) => {
+    started();
+    return { stream: new ReadableStream({ start(controller) {
+      controller.enqueue({ type: 'stream-start', warnings: [] });
+      abortSignal.addEventListener('abort', () => { aborted(); controller.close(); }, { once: true });
+    } }) };
+  });
+  t.after(() => streaming.mock.restore());
+  const controller = new AbortController();
+  const response = await fetch(`${baseUrl}/stream`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ messages: [user()] }), signal: controller.signal });
+  const reader = response.body.getReader();
+  await reader.read();
+  await providerStarted;
+  controller.abort();
+  let timeout;
+  try {
+    await Promise.race([providerAborted, new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Provider was not aborted')), 2000); })]);
+  } finally { clearTimeout(timeout); await reader.cancel().catch(() => {}); }
 });

@@ -1,0 +1,16 @@
+import LanguageSelector from '../../i18n/LanguageSelector.jsx';
+import useTranslation from "../../i18n/useTranslation.js";
+import { useState } from 'react';
+import { Link, NavLink } from 'react-router-dom';
+const links = [['Home', '/'], ['Properties', '/properties'], ['About', '/about'], ['Contact', '/contact']];
+export default function Navbar() {
+  const {
+    t
+  } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  return <header className="fixed top-0 left-0 right-0 z-50 bg-surface/85 backdrop-blur-xl border-b border-border shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div className="h-20 max-w-[1440px] mx-auto px-margin-mobile md:px-margin flex items-center justify-between gap-space-lg"><div className="flex items-center gap-space-md shrink-0"><img alt={""} aria-hidden="true" className="hidden sm:block h-8 w-8 shrink-0" src="/favicon.svg" /><Link className="flex flex-col text-left whitespace-nowrap" to="/"><span className="font-headline-sm text-headline-sm tracking-tight text-text-main font-semibold leading-none">AURA</span><span className="font-label-sm text-label-sm tracking-[0.2em] text-text-muted uppercase text-[10px] mt-0.5">Prime Real Estate</span></Link></div><nav aria-label={t("Main navigation")} className="hidden lg:flex items-center gap-space-lg xl:gap-space-xl" data-active-classes="text-text-main font-semibold">{links.map(([label, to]) => <NavLink key={to} to={to} end={to === '/'} className={({
+          isActive
+        }) => isActive ? 'transition-colors duration-150 text-text-main font-semibold' : 'font-label-md text-label-md text-text-muted hover:text-text-main transition-colors duration-150'}>{t(label)}</NavLink>)}</nav><div className="flex items-center gap-space-sm sm:gap-space-md"><div className="hidden lg:block"><LanguageSelector /></div><Link className="inline-flex items-center px-4 py-2 rounded-DEFAULT bg-primary text-primary-foreground font-label-md text-label-md hover:bg-inverse-surface transition-colors shadow-sm schedule-viewing" to="/contact" aria-label={t("Schedule Viewing")}><span className="hidden sm:inline">{t("Schedule")}{"\u00a0"}</span>{t("Viewing")}</Link><div aria-hidden="true" className="hidden lg:flex w-8 h-8 rounded-full bg-primary items-center justify-center"><span className="material-symbols-outlined text-on-primary text-[18px]">person</span></div><button type="button" aria-label={menuOpen ? t("Close navigation") : t("Open navigation")} aria-controls="mobile-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)} className="lg:hidden w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span className="material-symbols-outlined text-on-primary text-[18px]" aria-hidden="true">{menuOpen ? "close" : "menu"}</span></button></div></div>{menuOpen && <nav id="mobile-navigation" aria-label={t("Mobile navigation")} className="lg:hidden border-t border-border bg-surface px-margin-mobile py-4 flex flex-wrap items-center gap-6">{links.map(([label, to]) => <NavLink key={to} to={to} onClick={() => setMenuOpen(false)} className={({
+        isActive
+      }) => isActive ? 'font-semibold' : 'text-text-muted'}>{t(label)}</NavLink>)}<div className="w-full flex items-center justify-between gap-4"><span className="font-label-sm text-label-sm text-text-muted">{t("Language")}</span><LanguageSelector /></div></nav>}</header>;
+}
