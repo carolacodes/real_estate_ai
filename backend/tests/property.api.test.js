@@ -6,20 +6,25 @@ import { supabase } from "../libs/supabase.js";
 
 let server;
 let baseUrl;
-let dataset;
+const dataset = Array.from({ length: 65 }, (_, i) => ({
+  id: String(i).padStart(3, '0'), slug: `fixture-property-${i}`, price: 400000 + i * 10000,
+  project_name: `Fixture Residence ${i}`, bedrooms: i % 3, bathrooms: 1 + i % 2,
+  property_type: i % 2 ? 'Villa' : 'Apartment', furnishing: 'Furnished',
+  completion_status: 'Ready', address: i % 2 ? 'Dubai Marina' : 'Downtown 100%_test',
+  available: i !== 1, featured: i % 2 === 0, created_at: '2026-01-01T00:00:00Z',
+}));
+let databaseMock;
 
-// Fixture reads are deliberately read-only, independent of the API under test.
+// Only the Supabase boundary is mocked; HTTP, validation, routes and services remain real.
 before(async () => {
   server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
   baseUrl = `http://127.0.0.1:${server.address().port}/api/properties`;
-  const { data, error } = await supabase.from("properties").select("*");
-  assert.equal(error, null, "Read-only Supabase fixture query must succeed");
-  dataset = data;
-  assert.ok(dataset.length > 0, "Integration tests require the existing dataset");
+  databaseMock = mock.method(supabase, "from", () => fixtureQuery(dataset));
 });
 
 after(async () => {
+  databaseMock?.mock.restore();
   if (server) await new Promise((resolve, reject) => {
     server.close((error) => error ? reject(error) : resolve());
     server.closeAllConnections();
@@ -211,11 +216,29 @@ test("search paginates and returns empty pages with accurate metadata", async ()
 // A local read-only double covers unavailable rows even when every real row is available.
 // It replaces only the Supabase query boundary; HTTP, routes, validation and service remain real.
 function fixtureQuery(rows, error = null) {
-  let selected = rows;
+  let selected = [...rows];
+  const ordering = [];
   const query = {
     select() { return this; },
     eq(column, value) { selected = selected.filter((p) => p[column] === value); return this; },
-    order() { return this; },
+    gte(column, value) { selected = selected.filter(p => p[column] >= value); return this; },
+    lte(column, value) { selected = selected.filter(p => p[column] <= value); return this; },
+    ilike(column, pattern) {
+      const term = pattern.slice(1, -1).replace(/\\([%_\\])/g, '$1').toLowerCase();
+      selected = selected.filter(p => p[column].toLowerCase().includes(term));
+      return this;
+    },
+    order(column, { ascending }) {
+      ordering.push({ column, ascending });
+      selected.sort((a, b) => {
+        for (const { column: key, ascending: asc } of ordering) {
+          const diff = a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0;
+          if (diff) return asc ? diff : -diff;
+        }
+        return 0;
+      });
+      return this;
+    },
     range(start, end) { return Promise.resolve({ data: selected.slice(start, end + 1), count: selected.length, error }); },
     limit(limit) { return Promise.resolve({ data: selected.slice(0, limit), error }); },
     maybeSingle() { return Promise.resolve({ data: selected[0] ?? null, error }); },

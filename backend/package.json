@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "test": "node --import ./tests/setup.js --test tests/*.test.js",
     "dev": "nodemon index.js",
     "start": "node index.js",
     "clean:data": "node scripts/cleanProperties.js"
@@ -27,5 +27,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

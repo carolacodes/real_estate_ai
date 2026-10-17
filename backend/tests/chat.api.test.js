@@ -376,6 +376,8 @@ test('SSE delivers incremental text and empty properties for a clarification wit
   const response = await postStream('text/event-stream', [user('Quiero comprar una propiedad')]);
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /text\/event-stream/);
+  assert.equal(response.headers.get('cache-control'), 'no-cache, no-transform');
+  assert.equal(response.headers.get('x-accel-buffering'), 'no');
   const events = frames(await response.text());
   assert.deepEqual(events.filter(e => e.event === 'text-delta').map(e => e.data.text), ['Encontré ', 'propiedades.']);
   assert.deepEqual(events.find(e => e.event === 'properties').data.properties, []);
